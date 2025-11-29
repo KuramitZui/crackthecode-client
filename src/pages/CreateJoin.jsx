@@ -9,11 +9,31 @@ export default function CreateJoin() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const handleRoomList = (list) => setRooms(list);
-    socket.on("roomList", handleRoomList);
-    socket.emit("requestRooms");
-    return () => socket.off("roomList", handleRoomList);
-  }, []);
+    const updateRoomList = (list) => {
+      const filtered = list.filter(
+        (r) => r.status === "waiting" || r.status === "started"
+      );
+      setRooms(filtered);
+    };
+
+    // Listen for room list updates (this persists throughout the component lifecycle)
+    socket.on("roomList", updateRoomList);
+
+    // Request rooms when socket connects
+    const requestRooms = () => socket.emit("requestRooms");
+    socket.on("connect", requestRooms);
+
+    // If already connected, request rooms immediately
+    if (socket.connected) {
+      requestRooms();
+    }
+
+    // Cleanup listeners on unmount
+    return () => {
+      socket.off("roomList", updateRoomList);
+      socket.off("connect", requestRooms);
+    };
+  }, []); // Empty dependency array ensures this runs once and persists
 
   const handleCreate = () => {
     if (!inputName) return alert("Enter your name");

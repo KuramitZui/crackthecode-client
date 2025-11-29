@@ -10,7 +10,7 @@ export default function Game() {
   const { name, playerNumber } = location.state || {};
 
   const [room, setRoom] = useState(null);
-  const [currentTurn, setCurrentTurn] = useState(null); // Track current turn
+  const [currentTurn, setCurrentTurn] = useState(null);
   const [code, setCode] = useState(["", "", "", ""]);
   const [guess, setGuess] = useState(["", "", "", ""]);
   const [showRematchPrompt, setShowRematchPrompt] = useState(false);
@@ -21,56 +21,64 @@ export default function Game() {
   const [opponentSurrendered, setOpponentSurrendered] = useState(false);
 
   useEffect(() => {
-  const handleRoomUpdate = (updatedRoom) => {
-    setRoom(updatedRoom);
-    setCurrentTurn(updatedRoom.currentTurn);
-  };
+    const handleRoomUpdate = (updatedRoom) => {
+      setRoom(updatedRoom);
+      setCurrentTurn(updatedRoom.currentTurn);
+    };
 
-  socket.on("roomUpdate", handleRoomUpdate);
-  socket.on("playerJoined", ({ name }) => showTempNotification(`${name} has joined the game!`));
-  socket.on("playerLeft", ({ name, surrendered }) => {
-    setOpponentSurrendered(true);
-    showTempNotification(surrendered ? `${name} surrendered.` : `${name} left the game.`);
-  });
-  socket.on("rematchRequested", () => setShowRematchPrompt(true));
-  socket.on("rematchAccepted", () => {
-    setCode(["", "", "", ""]);
-    setGuess(["", "", "", ""]);
-    setShowRematchPrompt(false);
-    setWaitingForOpponent(false);
-  });
-  socket.on("rematchDeclined", () => {
-    showTempNotification("Opponent declined. Returning to home.");
-    setTimeout(() => navigate('/'), 1500);
-  });
+    // KEY FIX: Navigate away when opponent leaves
+    const handlePlayerLeft = ({ name, surrendered }) => {
+      showTempNotification(surrendered ? `${name} surrendered.` : `${name} left the game.`);
+      
+      // Navigate back to lobby after a short delay
+      setTimeout(() => {
+        navigate('/create-join', { replace: true });
+      }, 2000);
+    };
 
-  socket.on("opponentSurrendered", ({ name }) => {
-    setOpponentSurrendered(true);
-    showTempNotification(`${name} surrendered. You win!`);
-  });
+    socket.on("roomUpdate", handleRoomUpdate);
+    socket.on("playerJoined", ({ name }) => showTempNotification(`${name} has joined the game!`));
+    socket.on("playerLeft", handlePlayerLeft); // This now properly handles navigation
+    socket.on("rematchRequested", () => setShowRematchPrompt(true));
+    socket.on("rematchAccepted", () => {
+      setCode(["", "", "", ""]);
+      setGuess(["", "", "", ""]);
+      setShowRematchPrompt(false);
+      setWaitingForOpponent(false);
+      setOpponentSurrendered(false);
+    });
+    socket.on("rematchDeclined", () => {
+      showTempNotification("Opponent declined. Returning to home.");
+      setTimeout(() => navigate('/create-join', { replace: true }), 1500);
+    });
 
-  socket.on("surrendered", () => {
-    setTimeout(() => navigate('/'), 2000); // delay for UX
-  });
+    socket.on("opponentSurrendered", ({ name }) => {
+      setOpponentSurrendered(true);
+      showTempNotification(`${name} surrendered. You win!`);
+    });
 
-  socket.emit("getRoomState", roomId);
+    socket.on("surrendered", () => {
+      setTimeout(() => navigate('/create-join', { replace: true }), 1000);
+    });
 
-  return () => {
-    socket.off("roomUpdate", handleRoomUpdate);
-    socket.off("playerJoined");
-    socket.off("playerLeft");
-    socket.off("rematchRequested");
-    socket.off("rematchAccepted");
-    socket.off("rematchDeclined");
-    socket.off("opponentSurrendered");
-    socket.off("surrendered");
-  };
-}, [roomId, navigate]);
+    // Request initial room state
+    socket.emit("getRoomState", roomId);
 
+    return () => {
+      socket.off("roomUpdate", handleRoomUpdate);
+      socket.off("playerJoined");
+      socket.off("playerLeft", handlePlayerLeft);
+      socket.off("rematchRequested");
+      socket.off("rematchAccepted");
+      socket.off("rematchDeclined");
+      socket.off("opponentSurrendered");
+      socket.off("surrendered");
+    };
+  }, [roomId, navigate]);
 
   const showTempNotification = (msg) => {
     setNotification(msg);
-    setTimeout(() => setNotification(""), 2000);
+    setTimeout(() => setNotification(""), 3000);
   };
 
   const submitCode = () => {
@@ -106,7 +114,7 @@ export default function Game() {
   const opponent = room[opponentKey];
 
   const gameOver = !!room.winnerId;
-  const canPlay = me.code && opponent?.code; // Both codes set
+  const canPlay = me.code && opponent?.code;
   const iWin = room.winnerId === socket.id;
 
   const colorMap = {
@@ -156,7 +164,7 @@ export default function Game() {
   const respondToRematch = (accept) => {
     socket.emit("respondRematch", { roomId, accept });
     setShowRematchPrompt(false);
-    if (!accept) navigate('/');
+    if (!accept) navigate('/create-join', { replace: true });
   };
 
   const handleSurrender = () => setShowSurrenderPrompt(true);
@@ -165,22 +173,22 @@ export default function Game() {
     setShowSurrenderPrompt(false);
     if (confirm) {
       socket.emit("surrender", { roomId });
-      navigate('/');
+      // Don't navigate immediately - let the server response handle it
     }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-black via-emerald-950 to-gray-900 p-6 relative">
       {notification && (
-        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-white/20 text-white px-4 py-2 rounded-xl shadow-lg z-50">
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-white/20 text-white px-6 py-3 rounded-xl shadow-lg z-50 backdrop-blur-lg">
           {notification}
         </div>
       )}
 
-      {/* Room ID */}
-      <div className="text-center mb-6">
+      {/* Room ID + Back to Home */}
+      <div className="flex justify-center items-center gap-4 mb-6">
         <div
-          className="inline-flex items-center gap-3 bg-white/10 backdrop-blur-lg rounded-xl px-6 py-3 cursor-pointer"
+          className="inline-flex items-center gap-3 bg-white/10 backdrop-blur-lg rounded-xl px-6 py-3 cursor-pointer hover:bg-white/15 transition"
           onClick={copyRoomId}
           title="Click to copy"
         >
@@ -190,7 +198,15 @@ export default function Game() {
             <p className="font-mono font-bold text-xl">#{roomId}</p>
           </div>
         </div>
+
+        <button
+          onClick={handleSurrender}
+          className="bg-gradient-to-r from-red-600 to-rose-600 text-white font-semibold py-3 px-6 rounded-xl hover:shadow-xl transform hover:scale-105 transition"
+        >
+          🏠 Home
+        </button>
       </div>
+
 
       {/* Info Button */}
       <div className="text-center mb-6">
@@ -205,7 +221,7 @@ export default function Game() {
 
       {/* Color Guide */}
       {showColorGuide && (
-        <div className="flex justify-center gap-6 mb-6 p-4 bg-white/10 backdrop-blur-lg rounded-xl mx-auto max-w-md">
+        <div className="flex flex-col sm:flex-row justify-center gap-4 mb-6 p-4 bg-white/10 backdrop-blur-lg rounded-xl mx-auto max-w-2xl">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-full bg-green-500 border border-green-600 shadow-lg"></div>
             <span className="text-white text-sm">Right number, right place</span>
@@ -226,19 +242,6 @@ export default function Game() {
         <div className={`bg-white/10 backdrop-blur-lg rounded-2xl p-6 shadow-2xl border ${
           currentTurn === meKey ? "border-emerald-500/80" : "border-emerald-500/30"
         }`}>
-          <div className="flex items-center gap-2 mb-4">
-            <span className="text-2xl">👤</span>
-            <h3 className="text-2xl font-bold text-white">You</h3>
-          </div>
-          <p className="text-emerald-300 text-sm mb-4">{name}</p>
-          <div className="mb-4">
-            <button
-              onClick={handleSurrender}
-              className="w-full bg-gradient-to-r from-red-600 to-rose-600 text-white font-semibold py-2 rounded-xl hover:shadow-xl transform hover:scale-105 transition"
-            >
-              🏠 Back to Home
-            </button>
-          </div>
 
           <div className="mb-6">
             <p className="text-emerald-200 text-sm font-medium mb-2">Your Secret Code</p>
@@ -317,7 +320,7 @@ export default function Game() {
                     maxLength={1}
                     value={guess[idx]}
                     onChange={(e) => {
-                      if (currentTurn !== meKey) return; // disable input
+                      if (currentTurn !== meKey) return;
                       const val = e.target.value.replace(/\D/, "");
                       setGuess((prev) => {
                         const arr = [...prev];
@@ -383,56 +386,59 @@ export default function Game() {
 
       {/* Game Over Overlay */}
       {(gameOver || opponentSurrendered) && (
-  <div className="fixed inset-0 flex items-center justify-center bg-black/70 z-50">
-    <div className="bg-white/10 backdrop-blur-lg p-8 rounded-2xl text-center max-w-sm">
-      <div className="text-6xl mb-4 text-white font-semibold">
-        {opponentSurrendered ? "You Win!" : iWin ? "You Win!" : "You Lose"}
-      </div>
-      <p className="text-white mb-4">Opponent: {opponent?.name || "N/A"}</p>
-      <p className="text-emerald-300 mb-4 font-bold">
-        Score: {getScore(meKey)} - {getScore(opponentKey)}
-      </p>
+        <div className="fixed inset-0 flex items-center justify-center bg-black/70 z-50">
+          <div className="bg-white/10 backdrop-blur-lg p-8 rounded-2xl text-center max-w-sm">
+            <div className="text-6xl mb-4">
+              {opponentSurrendered ? "🏆" : iWin ? "🏆" : "😢"}
+            </div>
+            <h2 className="text-3xl text-white font-bold mb-2">
+              {opponentSurrendered ? "You Win!" : iWin ? "You Win!" : "You Lose"}
+            </h2>
+            <p className="text-white mb-4">Opponent: {opponent?.name || "N/A"}</p>
+            <p className="text-emerald-300 mb-6 font-bold text-xl">
+              Score: {getScore(meKey)} - {getScore(opponentKey)}
+            </p>
 
-      {/* If opponent surrendered, only show Back to Home */}
-      {opponentSurrendered ? (
-        <button
-          onClick={() => navigate("/")}
-          className="w-full bg-red-600 text-white py-3 rounded-xl hover:shadow-xl transform hover:scale-105 transition"
-        >
-          🏠 Back to Home
-        </button>
-      ) : (
-        // Game over but opponent didn't surrender
-        !waitingForOpponent && !showRematchPrompt && (
-          <button
-            onClick={requestRematch}
-            className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-3 rounded-xl hover:shadow-xl transform hover:scale-105 transition"
-          >
-            🔄 Play Again?
-          </button>
-        )
+            {opponentSurrendered ? (
+              <button
+                onClick={() => navigate('/create-join', { replace: true })}
+                className="w-full bg-gradient-to-r from-red-600 to-rose-600 text-white font-semibold py-3 rounded-xl hover:shadow-xl transform hover:scale-105 transition"
+              >
+                🏠 Back to Home
+              </button>
+            ) : waitingForOpponent ? (
+              <p className="text-emerald-300 animate-pulse">Waiting for opponent...</p>
+            ) : showRematchPrompt ? null : (
+              <button
+                onClick={requestRematch}
+                className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-semibold py-3 rounded-xl hover:shadow-xl transform hover:scale-105 transition"
+              >
+                🔄 Play Again?
+              </button>
+            )}
+          </div>
+        </div>
       )}
-    </div>
-  </div>
-)}
 
       {/* Rematch Prompt */}
       {showRematchPrompt && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/70 z-50">
-          <div className="bg-white/10 backdrop-blur-lg p-6 rounded-2xl text-center max-w-sm">
-            <p className="text-white mb-4">Opponent wants a rematch!</p>
+          <div className="bg-white/10 backdrop-blur-lg p-8 rounded-2xl text-center max-w-sm">
+            <div className="text-5xl mb-4">🔄</div>
+            <h3 className="text-2xl text-white font-bold mb-4">Rematch Request</h3>
+            <p className="text-emerald-300 mb-6">{opponent?.name} wants a rematch!</p>
             <div className="flex gap-4 justify-center">
               <button
                 onClick={() => respondToRematch(true)}
-                className="bg-emerald-600 text-white py-2 px-6 rounded-xl hover:shadow-xl transform hover:scale-105 transition"
+                className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-semibold py-3 px-8 rounded-xl hover:shadow-xl transform hover:scale-105 transition"
               >
-                Accept
+                ✓ Accept
               </button>
               <button
                 onClick={() => respondToRematch(false)}
-                className="bg-red-600 text-white py-2 px-6 rounded-xl hover:shadow-xl transform hover:scale-105 transition"
+                className="bg-gradient-to-r from-red-600 to-rose-600 text-white font-semibold py-3 px-8 rounded-xl hover:shadow-xl transform hover:scale-105 transition"
               >
-                Decline
+                ✗ Decline
               </button>
             </div>
           </div>
@@ -442,20 +448,22 @@ export default function Game() {
       {/* Surrender Prompt */}
       {showSurrenderPrompt && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/70 z-50">
-          <div className="bg-white/10 backdrop-blur-lg p-6 rounded-2xl text-center max-w-sm">
-            <p className="text-white mb-4">Are you sure you want to surrender?</p>
+          <div className="bg-white/10 backdrop-blur-lg p-8 rounded-2xl text-center max-w-sm">
+            <div className="text-5xl mb-4">⚠️</div>
+            <h3 className="text-2xl text-white font-bold mb-4">Leave Game?</h3>
+            <p className="text-gray-300 mb-6">This will count as a loss and you'll return to the lobby.</p>
             <div className="flex gap-4 justify-center">
               <button
                 onClick={() => respondToSurrender(true)}
-                className="bg-red-600 text-white py-2 px-6 rounded-xl hover:shadow-xl transform hover:scale-105 transition"
+                className="bg-gradient-to-r from-red-600 to-rose-600 text-white font-semibold py-3 px-8 rounded-xl hover:shadow-xl transform hover:scale-105 transition"
               >
-                Yes
+                Yes, Leave
               </button>
               <button
                 onClick={() => respondToSurrender(false)}
-                className="bg-emerald-600 text-white py-2 px-6 rounded-xl hover:shadow-xl transform hover:scale-105 transition"
+                className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-semibold py-3 px-8 rounded-xl hover:shadow-xl transform hover:scale-105 transition"
               >
-                No
+                Stay
               </button>
             </div>
           </div>
