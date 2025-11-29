@@ -20,6 +20,7 @@ export default function Game() {
   const [showSurrenderPrompt, setShowSurrenderPrompt] = useState(false);
   const [opponentSurrendered, setOpponentSurrendered] = useState(false);
   const inputRefs = useRef([]);
+  const [timers, setTimers] = useState({ player1: 60, player2: 60 });
 
   useEffect(() => {
     const handleRoomUpdate = (updatedRoom) => {
@@ -76,6 +77,17 @@ export default function Game() {
       socket.off("surrendered");
     };
   }, [roomId, navigate]);
+
+  useEffect(() => {
+  socket.on("timerUpdate", (updatedTimers) => {
+    setTimers(updatedTimers);
+  });
+
+  return () => {
+    socket.off("timerUpdate");
+  };
+}, []);
+
 
   const showTempNotification = (msg) => {
     setNotification(msg);
@@ -252,6 +264,9 @@ export default function Game() {
         <div className={`bg-white/10 backdrop-blur-lg rounded-2xl p-6 shadow-2xl border ${
           currentTurn === meKey ? "border-emerald-500/80" : "border-emerald-500/30"
         }`}>
+<div className="text-white mb-4">
+  <p className="text-sm text-gray-300">Time Left: {timers[meKey]}s</p>
+</div>
 
           <div className="mb-6">
             <p className="text-emerald-200 text-sm font-medium mb-2">Your Secret Code</p>
