@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef} from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import socket from "../socketio";
 import { FaInfoCircle } from "react-icons/fa";
@@ -19,6 +19,7 @@ export default function Game() {
   const [notification, setNotification] = useState("");
   const [showSurrenderPrompt, setShowSurrenderPrompt] = useState(false);
   const [opponentSurrendered, setOpponentSurrendered] = useState(false);
+  const inputRefs = useRef([]);
 
   useEffect(() => {
     const handleRoomUpdate = (updatedRoom) => {
@@ -161,13 +162,22 @@ export default function Game() {
     socket.emit("requestRematch", { roomId });
   };
 
+  const handleHomeClick = () => {
+  if (opponent) {
+    // If opponent exists, show surrender prompt
+    setShowSurrenderPrompt(true);
+  } else {
+    // If alone, just leave the room without triggering surrender
+    socket.emit("leaveRoom", { roomId }); // Optional: notify server
+    navigate('/create-join', { replace: true });
+  }
+};
+
   const respondToRematch = (accept) => {
     socket.emit("respondRematch", { roomId, accept });
     setShowRematchPrompt(false);
     if (!accept) navigate('/create-join', { replace: true });
   };
-
-  const handleSurrender = () => setShowSurrenderPrompt(true);
 
   const respondToSurrender = (confirm) => {
     setShowSurrenderPrompt(false);
@@ -200,7 +210,7 @@ export default function Game() {
         </div>
 
         <button
-          onClick={handleSurrender}
+          onClick={handleHomeClick}
           className="bg-gradient-to-r from-red-600 to-rose-600 text-white font-semibold py-3 px-6 rounded-xl hover:shadow-xl transform hover:scale-105 transition"
         >
           🏠 Home
@@ -258,15 +268,28 @@ export default function Game() {
                 : code.map((_, idx) => (
                     <input
                       key={idx}
+                      ref={(el) => (inputRefs.current[idx] = el)}
                       maxLength={1}
                       value={code[idx]}
                       onChange={(e) => {
                         const val = e.target.value.replace(/\D/, "");
+
                         setCode((prev) => {
                           const arr = [...prev];
                           arr[idx] = val;
                           return arr;
                         });
+
+                        // Auto move to next input
+                        if (val && idx < code.length - 1) {
+                          inputRefs.current[idx + 1]?.focus();
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        // Move to previous input when pressing backspace on empty field
+                        if (e.key === "Backspace" && !code[idx] && idx > 0) {
+                          inputRefs.current[idx - 1]?.focus();
+                        }
                       }}
                       className="w-14 h-14 text-center text-xl font-bold bg-white/10 border-2 border-emerald-500/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
                     />
@@ -315,24 +338,43 @@ export default function Game() {
               </div>
               <div className="flex justify-center gap-2 mb-4">
                 {guess.map((g, idx) => (
-                  <input
-                    key={idx}
-                    maxLength={1}
-                    value={guess[idx]}
-                    onChange={(e) => {
-                      if (currentTurn !== meKey) return;
-                      const val = e.target.value.replace(/\D/, "");
-                      setGuess((prev) => {
-                        const arr = [...prev];
-                        arr[idx] = val;
-                        return arr;
-                      });
-                    }}
-                    className={`w-16 h-16 text-center text-2xl font-bold bg-white/10 border-2 border-emerald-500/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition ${
+                <input
+                  key={idx}
+                  ref={(el) => (inputRefs.current[idx] = el)}
+                  maxLength={1}
+                  value={guess[idx]}
+                  onChange={(e) => {
+                    if (currentTurn !== meKey) return;
+
+                    const val = e.target.value.replace(/\D/, "");
+
+                    setGuess((prev) => {
+                      const arr = [...prev];
+                      arr[idx] = val;
+                      return arr;
+                    });
+
+                    // Auto focus NEXT input if value is entered
+                    if (val && idx < guess.length - 1) {
+                      inputRefs.current[idx + 1]?.focus();
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (currentTurn !== meKey) return;
+
+                    // If press backspace on empty, go to previous input
+                    if (e.key === "Backspace" && !guess[idx] && idx > 0) {
+                      inputRefs.current[idx - 1]?.focus();
+                    }
+                  }}
+                  className={`w-16 h-16 text-center text-2xl font-bold bg-white/10 border-2 
+                    border-emerald-500/50 rounded-xl text-white focus:outline-none 
+                    focus:ring-2 focus:ring-emerald-500 transition ${
                       currentTurn !== meKey ? "opacity-50 cursor-not-allowed" : ""
                     }`}
-                  />
-                ))}
+                />
+              ))}
+
               </div>
               <button
                 onClick={submitGuess}
