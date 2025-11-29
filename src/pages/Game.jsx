@@ -271,6 +271,8 @@ export default function Game() {
                       ref={(el) => (inputRefs.current[idx] = el)}
                       maxLength={1}
                       value={code[idx]}
+                      inputMode="numeric"       // <— Forces numeric keyboard on mobile
+                      pattern="[0-9]*" 
                       onChange={(e) => {
                         const val = e.target.value.replace(/\D/, "");
 
@@ -343,6 +345,8 @@ export default function Game() {
                   ref={(el) => (inputRefs.current[idx] = el)}
                   maxLength={1}
                   value={guess[idx]}
+                  inputMode="numeric"       // <— Forces numeric keyboard on mobile
+                  pattern="[0-9]*" 
                   onChange={(e) => {
                     if (currentTurn !== meKey) return;
 
