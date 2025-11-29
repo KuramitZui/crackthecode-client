@@ -2,6 +2,7 @@ import { useState, useEffect, useRef} from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import socket from "../socketio";
 import { FaInfoCircle } from "react-icons/fa";
+import timerturn from '../assets/timer.mp3';
 
 export default function Game() {
   const { roomId } = useParams();
@@ -21,6 +22,7 @@ export default function Game() {
   const [opponentSurrendered, setOpponentSurrendered] = useState(false);
   const inputRefs = useRef([]);
   const [timers, setTimers] = useState({ player1: 60, player2: 60 });
+  const timerRef = useRef(new Audio(timerturn)); // Audio ref
 
   useEffect(() => {
     const handleRoomUpdate = (updatedRoom) => {
